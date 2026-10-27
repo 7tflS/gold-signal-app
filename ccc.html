@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAU/USD — لوحة التحليل الذكية</title>
+<!-- مكتبة الرسم البياني من TradingView -->
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, Tahoma, sans-serif;
+    background: #0a0f1c;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 15px;
+  }
+  .dashboard {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  .card {
+    background: linear-gradient(145deg, #111a2e, #0d1524);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,215,0,0.06);
+  }
+  .header { text-align: center; }
+  .header h1 { font-size: 20px; color: #ffd700; font-weight: 600; }
+  .header p { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+  /* السعر والوقت */
+  .price-time-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .price-main { text-align: center; flex: 1; }
+  .price-label { font-size: 12px; color: #94a3b8; }
+  .price { font-size: 44px; font-weight: 800; color: #ffd700; letter-spacing: -1px; transition: color 0.3s; }
+  .price.up { color: #00e676; }
+  .price.down { color: #ff5252; }
+  .time-box {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 10px 18px;
+    text-align: center;
+    min-width: 150px;
+  }
+  .time-box .label { font-size: 11px; color: #94a3b8; }
+  .time-box .value { font-size: 18px; font-weight: 700; font-family: 'Courier New', monospace; color: #ffd700; }
+
+  /* الرسم البياني */
+  #chartContainer { width: 100%; height: 300px; border-radius: 12px; overflow: hidden; }
+
+  /* الإشارة */
+  .signal-box {
+    text-align: center;
+    padding: 18px;
+    border-radius: 16px;
+    transition: all 0.4s ease;
+    background: #1e293b;
+  }
+  .signal-box.buy { background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.3); }
+  .signal-box.sell { background: rgba(255,82,82,0.12); border: 1px solid rgba(255,82,82,0.3); }
+  .signal-box.wait { background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.25); }
+  .signal-text { font-size: 30px; font-weight: 800; }
+  .signal-box.buy .signal-text { color: #00e676; }
+  .signal-box.sell .signal-text { color: #ff5252; }
+  .signal-box.wait .signal-text { color: #ffc107; }
+  .confidence { font-size: 14px; color: #94a3b8; margin-top: 6px; }
+
+  /* التحليل والأهداف */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .detail { background: #1e293b; border-radius: 12px; padding: 14px; text-align: center; }
+  .detail .label { font-size: 12px; color: #94a3b8; margin-bottom: 5px; }
+  .detail .value { font-size: 18px; font-weight: 700; }
+  .detail.sl .value { color: #ff5252; }
+  .detail.tp .value { color: #00e676; }
+  .detail.rsi .value { color: #60a5fa; }
+  .detail.atr .value { color: #fbbf24; }
+
+  /* النصائح */
+  .advice-box {
+    background: rgba(255,215,0,0.06);
+    border-right: 4px solid #ffd700;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #cbd5e1;
+  }
+  .advice-box strong { color: #ffd700; }
+
+  .footer { text-align: center; font-size: 11px; color: #475569; line-height: 1.8; }
+  .status { text-align: center; font-size: 12px; color: #64748b; margin-top: 5px; }
+  .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00e676; margin-left: 5px; animation: pulse 1.5s infinite; }
+  .status .dot.off { background: #ff5252; animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  @media (max-width: 500px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .price { font-size: 34px; }
+  }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- الهيدر -->
+  <div class="card header">
+    <h1>🥇 XAU/USD — لوحة التحليل الذكية</h1>
+    <p>سعر لحظي · رسم بياني · تحليل فني · أهداف واستراتيجية</p>
+  </div>
+
+  <!-- السعر والوقت -->
+  <div class="card">
+    <div class="price-time-bar">
+      <div class="price-main">
+        <div class="price-label">سعر الذهب اللحظي (XAU/USD)</div>
+        <div class="price" id="price">--</div>
+      </div>
+      <div class="time-box">
+        <div class="label">⏰ التوقيت المحلي</div>
+        <div class="value" id="clock">--:--:--</div>
+        <div class="label" id="date" style="margin-top:4px;">--</div>
+      </div>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">جاري الاتصال بالبث المباشر...</span></div>
+  </div>
+
+  <!-- الرسم البياني -->
+  <div class="card">
+    <div id="chartContainer"></div>
+  </div>
+
+  <!-- الإشارة -->
+  <div class="card">
+    <div class="signal-box wait" id="signalBox">
+      <div class="signal-text" id="signalText">جاري التحليل...</div>
+      <div class="confidence" id="confidence">--</div>
+    </div>
+
+    <!-- الأهداف والتحليل -->
+    <div class="grid-2" style="margin-top:15px;">
+      <div class="detail sl">
+        <div class="label">🛑 وقف الخسارة (SL)</div>
+        <div class="value" id="sl">--</div>
+      </div>
+      <div class="detail tp">
+        <div class="label">🎯 الهدف (TP)</div>
+        <div class="value" id="tp">--</div>
+      </div>
+      <div class="detail rsi">
+        <div class="label">📊 RSI (14)</div>
+        <div class="value" id="rsi">--</div>
+      </div>
+      <div class="detail atr">
+        <div class="label">📈 التقلب (ATR)</div>
+        <div class="value" id="atr">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- النصائح -->
+  <div class="card">
+    <div class="advice-box" id="advice">
+      💡 <strong>نصيحة:</strong> جاري تحليل السوق...
+    </div>
+  </div>
+
+  <!-- الفوتر -->
+  <div class="footer">
+    ⚠️ هذا التحليل لأغراض تعليمية فقط وليس نصيحة مالية. التداول ينطوي على مخاطر عالية.<br>
+    البيانات لحظية عبر WebSocket — الرسم البياني من TradingView Lightweight Charts
+  </div>
+</div>
+
+<script>
+// ================== 1. الساعة الدقيقة ==================
+function updateClock() {
+  const now = new Date();
+  const timeEl = document.getElementById('clock');
+  const dateEl = document.getElementById('date');
+  if (timeEl) timeEl.innerText = now.toLocaleTimeString('ar-IQ', { hour12: false });
+  if (dateEl) dateEl.innerText = now.toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ================== 2. الرسم البياني (Lightweight Charts) ==================
+let chart, candleSeries;
+function initChart() {
+  const container = document.getElementById('chartContainer');
+  if (!container) return;
+
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 300,
+    layout: { background: { color: '#111a2e' }, textColor: '#94a3b8' },
+    grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#1e293b' },
+    timeScale: { borderColor: '#1e293b', timeVisible: true, secondsVisible: false }
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#00e676', downColor: '#ff5252',
+    borderUpColor: '#00e676', borderDownColor: '#ff5252',
+    wickUpColor: '#00e676', wickDownColor: '#ff5252'
+  });
+
+  // تحميل الشموع الأولية من Binance (PAXGUSDT يتتبع الذهب)
+  fetch('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=5m&limit=200')
+    .then(r => r.json())
+    .then(data => {
+      const candles = data.map(k => ({
+        time: Math.floor(k[0] / 1000),
+        open: parseFloat(k[1]),
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4])
+      }));
+      candleSeries.setData(candles);
+      calculateSignalFromCandles(candles);
+    })
+    .catch(err => console.error('Chart load error:', err));
+}
+
+// إعادة ضبط حجم الرسم عند تغيير حجم النافذة
+window.addEventListener('resize', () => {
+  if (chart) chart.applyOptions({ width: document.getElementById('chartContainer').clientWidth });
+});
+
+// ================== 3. المؤشرات الفنية ==================
+function ema(values, period) {
+  const k = 2 / (period + 1);
+  const out = new Array(values.length);
+  out[0] = values[0];
+  for (let i = 1; i < values.length; i++) out[i] = values[i] * k + out[i-1] * (1-k);
+  return out;
+}
+
+function rsiCalc(closes, period = 14) {
+  const out = new Array(closes.length).fill(null);
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i-1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / period, avgLoss = losses / period;
+  out[period] = avgLoss === 0 ? 100 : 100 - 100/(1 + avgGain/avgLoss);
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i-1];
+    const g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
+    avgGain = (avgGain*(period-1) + g) / period;
+    avgLoss = (avgLoss*(period-1) + l) / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100/(1 + avgGain/avgLoss);
+  }
+  return out;
+}
+
+function atrCalc(highs, lows, closes, period = 14) {
+  const tr = new Array(closes.length);
+  tr[0] = highs[0] - lows[0];
+  for (let i = 1; i < closes.length; i++) {
+    tr[i] = Math.max(highs[i]-lows[i], Math.abs(highs[i]-closes[i-1]), Math.abs(lows[i]-closes[i-1]));
+  }
+  const out = new Array(tr.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += tr[i];
+  out[period-1] = sum/period;
+  for (let i = period; i < tr.length; i++) out[i] = (out[i-1]*(period-1) + tr[i]) / period;
+  return out;
+}
+
+// ================== 4. توليد الإشارة والنصائح ==================
+function calculateSignalFromCandles(candles) {
+  if (!candles || candles.length < 60) return;
+
+  const closes = candles.map(c => c.close);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+
+  const ema9  = ema(closes, 9);
+  const ema21 = ema(closes, 21);
+  const ema50 = ema(closes, 50);
+  const rsiArr = rsiCalc(closes);
+  const atrArr = atrCalc(highs, lows, closes);
+
+  const i = closes.length - 1;
+  let score = 0;
+
+  if (ema9[i]  > ema21[i]) score += 1; else score -= 1;
+  if (closes[i] > ema50[i]) score += 1; else score -= 1;
+
+  // MACD مبسط
+  const e12 = ema(closes, 12), e26 = ema(closes, 26);
+  const macdLine = e12.map((v, idx) => v - e26[idx]);
+  const sigLine = ema(macdLine, 9);
+  if (macdLine[i] > sigLine[i]) score += 1; else score -= 1;
+
+  if (rsiArr[i] > 55) score += 1;
+  else if (rsiArr[i] < 45) score -= 1;
+
+  let action = 'WAIT';
+  if (score >= 2) action = 'BUY';
+  else if (score <= -2) action = 'SELL';
+
+  const confidence = Math.round(Math.abs(score) / 4 * 100);
+  const price = closes[i];
+  const atr = atrArr[i] || price * 0.005;
+
+  let sl = null, tp = null;
+  if (action === 'BUY')  { sl = price - 1.5*atr; tp = price + 2.5*atr; }
+  if (action === 'SELL') { sl = price + 1.5*atr; tp = price - 2.5*atr; }
+
+  // تحديث الواجهة
+  document.getElementById('rsi').innerText = rsiArr[i] ? rsiArr[i].toFixed(1) : '--';
+  document.getElementById('atr').innerText = atr.toFixed(2);
+
+  const box = document.getElementById('signalBox');
+  const text = document.getElementById('signalText');
+  box.className = 'signal-box ' + (action === 'BUY' ? 'buy' : action === 'SELL' ? 'sell' : 'wait');
+  text.innerText = action === 'BUY' ? '🟢 شراء (BUY)' : action === 'SELL' ? '🔴 بيع (SELL)' : '🟡 انتظار (WAIT)';
+  document.getElementById('confidence').innerText = confidence + '% ثقة';
+  document.getElementById('sl').innerText = sl ? sl.toFixed(2) : '--';
+  document.getElementById('tp').innerText = tp ? tp.toFixed(2) : '--';
+
+  // نصائح التداول
+  const adviceEl = document.getElementById('advice');
+  if (action === 'BUY') {
+    adviceEl.innerHTML = `💡 <strong>نصيحة شراء:</strong> المؤشرات تدعم الصعود. فكّر في الدخول بعد تأكيد الارتداد من مستوى دعم قريب، مع وضع وقف الخسارة عند <strong>${sl.toFixed(2)}</strong> والهدف عند <strong>${tp.toFixed(2)}</strong>. لا تطارد السعر إذا ارتفع كثيراً.`;
+  } else if (action === 'SELL') {
+    adviceEl.innerHTML = `💡 <strong>نصيحة بيع:</strong> المؤشرات تدعم الهبوط. فكّر في البيع عند ملامسة مستوى مقاومة قريب، مع وقف الخسارة عند <strong>${sl.toFixed(2)}</strong> والهدف عند <strong>${tp.toFixed(2)}</strong>. تجنّب البيع في قاع حاد.`;
+  } else {
+    adviceEl.innerHTML = `💡 <strong>نصيحة انتظار:</strong> المؤشرات غير متفقة حالياً. من الأفضل عدم فتح صفقة حتى تتضح الإشارة (اتفاق 3 من 4 مؤشرات على الأقل). راقب مستويات الدعم والمقاومة القريبة.`;
+  }
+}
+
+// ================== 5. البث اللحظي للسعر (WebSocket) ==================
+let lastPrice = null;
+function connectWebSocket() {
+  // بث سعر PAXGUSDT (يتتبع الذهب) لحظياً من Binance
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/paxgusdt@ticker');
+
+  ws.onopen = () => {
+    document.getElementById('dot').className = 'dot';
+    document.getElementById('statusText').innerText = 'متصل مباشر — السعر يتحدث لحظياً';
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const price = parseFloat(data.c);
+    if (isNaN(price)) return;
+
+    const priceEl = document.getElementById('price');
+    priceEl.innerText = price.toFixed(2);
+
+    // تلوين السعر حسب الحركة
+    if (lastPrice !== null) {
+      priceEl.className = 'price ' + (price > lastPrice ? 'up' : price < lastPrice ? 'down' : '');
+    }
+    lastPrice = price;
+
+    // تحديث آخر شمعة في الرسم البياني
+    if (candleSeries) {
+      const now = Math.floor(Date.now() / 1000);
+      const currentCandleTime = now - (now % 300); // فريم 5 دقائق
+      candleSeries.update({
+        time: currentCandleTime,
+        open: price, high: price, low: price, close: price
+      });
+    }
+
+    // إعادة حساب الإشارة كل 15 ثانية تقريباً
+    if (!window._lastSignalTime || Date.now() - window._lastSignalTime > 15000) {
+      window._lastSignalTime = Date.now();
+      fetch('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=5m&limit=200')
+        .then(r => r.json())
+        .then(data => {
+          const candles = data.map(k => ({
+            time: Math.floor(k[0] / 1000),
+            open: parseFloat(k[1]), high: parseFloat(k[2]),
+            low: parseFloat(k[3]), close: parseFloat(k[4])
+          }));
+          calculateSignalFromCandles(candles);
+        })
+        .catch(() => {});
+    }
+  };
+
+  ws.onerror = () => {
+    document.getElementById('dot').className = 'dot off';
+    document.getElementById('statusText').innerText = 'انقطع الاتصال — جاري إعادة المحاولة...';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('dot').className = 'dot off';
+    document.getElementById('statusText').innerText = 'انقطع الاتصال — جاري إعادة الاتصال...';
+    setTimeout(connectWebSocket, 3000);
+  };
+}
+
+// ================== 6. بدء التشغيل ==================
+window.addEventListener('load', () => {
+  initChart();
+  connectWebSocket();
+  // تحديث احتياطي كل 30 ثانية في حال تأخر البث
+  setInterval(() => {
+    if (!lastPrice) {
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT')
+        .then(r => r.json())
+        .then(d => {
+          const p = parseFloat(d.price);
+          if (p) document.getElementById('price').innerText = p.toFixed(2);
+        })
+        .catch(() => {});
+    }
+  }, 30000);
+});
+</script>
+</body>
+</html>
