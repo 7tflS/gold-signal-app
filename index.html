@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>XAU/USD — لوحة التحليل الذكية</title>
-<!-- مكتبة الرسم البياني -->
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,7 +52,6 @@
     <p>سعر لحظي · رسم بياني · تحليل فني · أهداف واستراتيجية</p>
   </div>
 
-  <!-- السعر والوقت -->
   <div class="card">
     <div class="price-time-bar">
       <div class="price-main">
@@ -69,10 +67,8 @@
     <div class="status"><span class="dot off" id="dot"></span><span id="statusText">جاري الاتصال...</span></div>
   </div>
 
-  <!-- الرسم البياني -->
   <div class="card"><div id="chartContainer"></div></div>
 
-  <!-- الإشارة والأهداف -->
   <div class="card">
     <div class="signal-box wait" id="signalBox">
       <div class="signal-text" id="signalText">جاري التحليل...</div>
@@ -86,35 +82,32 @@
     </div>
   </div>
 
-  <!-- النصائح -->
   <div class="card">
     <div class="advice-box" id="advice">💡 <strong>نصيحة:</strong> جاري تحليل السوق...</div>
   </div>
 
   <div class="footer">
     ⚠️ هذا التحليل لأغراض تعليمية فقط وليس نصيحة مالية.<br>
-    البيانات لحظية ومحدثة تلقائياً.
+    البيانات لحظية من مزودين عالميين آمنين.
   </div>
 </div>
 
 <script>
-// ================== 1. الساعة الدقيقة جداً ==================
+// ================== 1. الساعة ==================
 function updateClock() {
   const now = new Date();
-  // ضبط الوقت بتنسيق 24 ساعة بأرقام إنجليزية لتجنب أي أخطاء برمجية
   let h = String(now.getHours()).padStart(2, '0');
   let m = String(now.getMinutes()).padStart(2, '0');
   let s = String(now.getSeconds()).padStart(2, '0');
-  document.getElementById('clock').innerText = `${h}:${m}:${s}`;
+  document.getElementById('clock').innerText = h + ':' + m + ':' + s;
   
-  // التاريخ
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   document.getElementById('date').innerText = now.toLocaleDateString('ar-EG', options);
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-// ================== 2. إعداد الرسم البياني ==================
+// ================== 2. الرسم البياني ==================
 let chart, candleSeries;
 function initChart() {
   const container = document.getElementById('chartContainer');
@@ -136,7 +129,7 @@ window.addEventListener('resize', () => {
   if (chart) chart.applyOptions({ width: document.getElementById('chartContainer').clientWidth }); 
 });
 
-// ================== 3. المؤشرات الفنية ==================
+// ================== 3. المؤشرات ==================
 function ema(values, period) {
   const k = 2 / (period + 1); const out = new Array(values.length); out[0] = values[0];
   for (let i = 1; i < values.length; i++) out[i] = values[i] * k + out[i-1] * (1-k);
@@ -165,31 +158,16 @@ function atrCalc(highs, lows, closes, period = 14) {
   return out;
 }
 
-// ================== 4. جلب البيانات (تحديث تلقائي) ==================
-async function fetchGoldPrice() {
-  try {
-    // جلب السعر الحقيقي للذهب من واجهة برمجية مجانية
-    const res = await fetch('https://api.gold-api.com/price/XAU');
-    const data = await res.json();
-    return parseFloat(data.price);
-  } catch (e) {
-    console.error("Price fetch error:", e);
-    // في حال فشل، نجلب سعر بديل من Binance
-    try {
-      const res2 = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
-      const data2 = await res2.json();
-      return parseFloat(data2.price);
-    } catch (e2) { return null; }
-  }
-}
-
+// ================== 4. جلب الشموع (مزود آمن) ==================
 async function fetchChartData() {
   try {
-    // جلب الشموع من Binance (تعمل في المتصفح بدون حجب)
-    const res = await fetch('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=5m&limit=200');
-    const data = await res.json();
-    const candles = data.map(k => ({
-      time: Math.floor(k[0] / 1000), // تحويل الميلي ثانية إلى ثواني
+    // محاولة OKX أولاً
+    const res = await fetch('https://www.okx.com/api/v5/market/candles?instId=PAXG-USDT&bar=5m&limit=100');
+    const json = await res.json();
+    
+    // ترتيب الشموع من الأقدم للأحدث
+    const candles = json.data.reverse().map(k => ({
+      time: Math.floor(parseInt(k[0]) / 1000),
       open: parseFloat(k[1]), high: parseFloat(k[2]),
       low: parseFloat(k[3]), close: parseFloat(k[4])
     }));
@@ -197,7 +175,20 @@ async function fetchChartData() {
     candleSeries.setData(candles);
     calculateSignal(candles);
   } catch (e) {
-    console.error("Chart fetch error:", e);
+    console.error("OKX Chart error:", e);
+    try {
+      // في حال فشل OKX، نجرب Binance
+      const res2 = await fetch('https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=5m&limit=100');
+      const data2 = await res2.json();
+      const candles2 = data2.map(k => ({
+        time: Math.floor(k[0] / 1000), open: parseFloat(k[1]), high: parseFloat(k[2]),
+        low: parseFloat(k[3]), close: parseFloat(k[4])
+      }));
+      candleSeries.setData(candles2);
+      calculateSignal(candles2);
+    } catch (e2) {
+      console.error("All chart APIs failed:", e2);
+    }
   }
 }
 
@@ -253,39 +244,51 @@ function calculateSignal(candles) {
   }
 }
 
-// ================== 6. تحديث السعر بسرعة (لحظياً) ==================
+// ================== 6. جلب السعر اللحظي ==================
 let lastPrice = null;
 async function updateLivePrice() {
-  const price = await fetchGoldPrice();
-  if (price) {
-    const priceEl = document.getElementById('price');
-    priceEl.innerText = price.toFixed(2);
+  try {
+    // محاولة جلب السعر من GoldPrice.org
+    const res = await fetch('https://data-asg.goldprice.org/dbXRates/USD');
+    const data = await res.json();
+    const price = parseFloat(data.items[0].xauPrice);
     
-    if (lastPrice !== null) {
-      if (price > lastPrice) priceEl.className = 'price up';
-      else if (price < lastPrice) priceEl.className = 'price down';
+    updatePriceUI(price);
+  } catch (e) {
+    try {
+      // بديل: OKX
+      const res2 = await fetch('https://www.okx.com/api/v5/market/ticker?instId=PAXG-USDT');
+      const data2 = await res2.json();
+      const price2 = parseFloat(data2.data[0].last);
+      updatePriceUI(price2);
+    } catch (e2) {
+      document.getElementById('dot').className = 'dot off';
+      document.getElementById('statusText').innerText = 'تعذر الاتصال بمزود السعر...';
     }
-    lastPrice = price;
-
-    document.getElementById('dot').className = 'dot';
-    document.getElementById('statusText').innerText = 'متصل مباشر — السعر يتحدث لحظياً';
-  } else {
-    document.getElementById('dot').className = 'dot off';
-    document.getElementById('statusText').innerText = 'ضعف في الاتصال، جاري إعادة المحاولة...';
   }
 }
 
-// ================== 7. بدء التشغيل ==================
+function updatePriceUI(price) {
+  const priceEl = document.getElementById('price');
+  priceEl.innerText = price.toFixed(2);
+  if (lastPrice !== null) {
+    if (price > lastPrice) priceEl.className = 'price up';
+    else if (price < lastPrice) priceEl.className = 'price down';
+  }
+  lastPrice = price;
+
+  document.getElementById('dot').className = 'dot';
+  document.getElementById('statusText').innerText = 'متصل مباشر — السعر يتحدث لحظياً';
+}
+
+// ================== 7. التشغيل ==================
 window.addEventListener('load', () => {
   initChart();
   fetchChartData();
   updateLivePrice();
 
-  // تحديث السعر كل 3 ثواني (لحظي تقريباً)
-  setInterval(updateLivePrice, 3000);
-  
-  // تحديث الرسم البياني والإشارات كل 30 ثانية
-  setInterval(fetchChartData, 30000);
+  setInterval(updateLivePrice, 3000);      // السعر كل 3 ثواني
+  setInterval(fetchChartData, 30000);      // الشموع كل 30 ثانية
 });
 </script>
 </body>
